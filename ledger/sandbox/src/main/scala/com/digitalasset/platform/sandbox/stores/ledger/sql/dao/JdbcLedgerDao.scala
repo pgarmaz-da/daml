@@ -794,10 +794,11 @@ private class JdbcLedgerDao(
         disclosure) =>
       final class AcsStoreAcc extends ActiveLedgerState[AcsStoreAcc] {
 
+        override def lookupContractByKey(key: GlobalKey): Option[AbsoluteContractId] =
+          selectContractKey(key)
+
         override def lookupContractLet(cid: AbsoluteContractId): Option[LetLookup] =
           lookupContractLetSync(cid)
-
-        override def keyExists(key: GlobalKey): Boolean = selectContractKey(key).isDefined
 
         override def addContract(c: ActiveContract, keyO: Option[GlobalKey]): AcsStoreAcc = {
           storeContract(offset, c)

@@ -26,6 +26,9 @@ case class InMemoryActiveLedgerState(
     parties: Map[Party, PartyDetails])
     extends ActiveLedgerState[InMemoryActiveLedgerState] {
 
+  override def lookupContractByKey(key: GlobalKey): Option[AbsoluteContractId] =
+    keys.get(key)
+
   def lookupContract(cid: AbsoluteContractId): Option[Contract] =
     activeContracts.get(cid).orElse[Contract](divulgedContracts.get(cid))
 
@@ -34,8 +37,6 @@ case class InMemoryActiveLedgerState(
       .get(cid)
       .map(c => Let(c.let))
       .orElse[LetLookup](divulgedContracts.get(cid).map(_ => LetUnknown))
-
-  override def keyExists(key: GlobalKey): Boolean = keys.contains(key)
 
   /**
     * Updates divulgence information on the given active contract with information

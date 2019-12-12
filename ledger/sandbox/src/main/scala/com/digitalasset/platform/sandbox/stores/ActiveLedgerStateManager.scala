@@ -23,6 +23,7 @@ import com.digitalasset.platform.sandbox.stores.ledger.SequencingError.Predicate
 import com.digitalasset.platform.sandbox.stores.ledger.SequencingError.{
   DuplicateKey,
   InactiveDependencyError,
+  InvalidLookup,
   PredicateType,
   TimeBeforeError
 }
@@ -170,7 +171,7 @@ class ActiveLedgerStateManager[ALS](initialState: => ALS)(
                       parties = parties.union(nodeParties))
                   case Some(key) =>
                     val gk = GlobalKey(activeContract.contract.template, key.key)
-                    if (acc keyExists gk) {
+                    if (acc.lookupContractByKey(gk).isDefined) {
                       AddTransactionState(
                         None,
                         errs + DuplicateKey(gk),
@@ -199,10 +200,20 @@ class ActiveLedgerStateManager[ALS](initialState: => ALS)(
                   archivedIds = if (ne.consuming) archivedIds + absCoid else archivedIds
                 )
               case nlkup: N.NodeLookupByKey.WithTxValue[AbsoluteContractId] =>
-                // NOTE(FM) we do not need to check anything, since
-                // * this is a lookup, it does not matter if the key exists or not
-                // * if the key exists, we have it as an internal invariant that the backing coid exists.
-                ats
+                // Check that the stored lookup result matches the current result
+                val gk = GlobalKey(nlkup.templateId, nlkup.key.key)
+                val nodeParties = nlkup.key.maintainers
+                val currentResult = acc.lookupContractByKey(gk)
+
+                if (currentResult == nlkup.result) {
+                  ats.copy(
+                    parties = parties.union(nodeParties),
+                  )
+                } else {
+                  ats.copy(
+                    errs = errs + InvalidLookup(gk, nlkup.result, currentResult)
+                  )
+                }
             }
         }
 
