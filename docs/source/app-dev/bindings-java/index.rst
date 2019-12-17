@@ -38,15 +38,6 @@ The Java bindings library is composed of:
     main implementation working against the DAML Ledger is the ``DamlLedgerClient``.
 
     Can be found in the java package ``com.daml.ledger.rxjava``.
-- The Reactive Components
-    A set of optional components you can use to assemble DAML Ledger applications. 
-
-    The most important components are: 
-
-    - the ``LedgerView``, which provides a local view of the Ledger
-    - the ``Bot``, which provides utility methods to assemble automation logic for the Ledger
-
-    Can be found in the java package ``com.daml.ledger.rxjava.components``.
 
 Code generation
 ===============
@@ -83,53 +74,6 @@ The ``LedgerView`` is updated every time:
 
 For instance, if an incoming transaction is received with a create event for a contract that is relevant
 for the application, the application ``LedgerView`` is updated to contain that contract too.
-
-Writing automations: Bot
-========================
-
-The ``Bot`` is an abstraction used to write automation for the DAML Ledger. It is conceptually
-defined by two aspects: 
-
-- the ``LedgerView``
-- the logic that produces commands, given a ``LedgerView`` 
-
-When the ``LedgerView`` is updated, to see if the bot has new commands to submit based on the
-updated view, the logic of the bot is run.
-
-The logic of the bot is a Java function from the bot's ``LedgerView`` to a ``Flowable<CommandsAndPendingSet>``.
-Each ``CommandsAndPendingSet`` contains:
-
-- the commands to send to the Ledger
-- the set of contractIds that should be considered pending while the command is in-flight
-  (that is, sent by the client but not yet processed by the Ledger)
-
-You can wire a ``Bot`` to a ``LedgerClient`` implementation using ``Bot.wire``:
-
-.. code-block:: java
-
-    Bot.wire(String applicationId,
-             LedgerClient ledgerClient,
-             TransactionFilter transactionFilter,
-             Function<LedgerViewFlowable.LedgerView<R>, Flowable<CommandsAndPendingSet>> bot,
-             Function<CreatedContract, R> transform)
-
-In the above:
-
-- ``applicationId``
-    The id used by the Ledger to identify all the queries from the same application.
-- ``ledgerClient`` 
-    The connection to the Ledger.
-- ``transactionFilter``
-    The server-side filter to the incoming transactions. Used to reduce the traffic between
-    Ledger and application and make an application more efficient.
-- ``bot``
-    The logic of the application,
-- ``transform``
-    The function that, given a new contract, returns which information for 
-    that contracts are useful for the application. Can be used to reduce space used
-    by discarding all the info not required by the application. The input to the function
-    contains the ``templateId``, the arguments of the contract created and the context of
-    the created contract. The context contains the ``workflowId``.
 
 Reference documentation
 ***********************
