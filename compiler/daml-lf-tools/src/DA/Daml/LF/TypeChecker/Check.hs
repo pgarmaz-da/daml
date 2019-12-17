@@ -102,6 +102,9 @@ checkType typ kind = do
 kindOfDataType :: DefDataType -> Kind
 kindOfDataType = foldr (KArrow . snd) KStar . dataParams
 
+kindOfTypeSyn :: DefTypeSyn -> Kind
+kindOfTypeSyn = foldr (KArrow . snd) KStar . synParams
+
 kindOfBuiltin :: BuiltinType -> Kind
 kindOfBuiltin = \case
   BTInt64 -> KStar
@@ -127,7 +130,7 @@ kindOfBuiltin = \case
 kindOf :: MonadGamma m => Type -> m Kind
 kindOf = \case
   TVar v -> lookupTypeVar v
-  TSyn{} -> error "TODO: kindOf, expand type synonym" -- TODO #3616
+  TSyn tsyn -> kindOfTypeSyn <$> inWorld (lookupTypeSyn tsyn)
   TCon tcon -> kindOfDataType <$> inWorld (lookupDataType tcon)
   -- NOTE(MH): Types of the form `(forall f. f) a` are only relevant for
   -- impredicative polymorphism, which we don't support. Since this type
@@ -144,6 +147,27 @@ kindOf = \case
   TForall (v, k) t1 -> introTypeVar v k $ checkType t1 KStar $> KStar
   TStruct recordType -> checkRecordType recordType $> KStar
   TNat _ -> pure KNat
+
+expandTypeSynonyms :: MonadGamma m => Type -> m Type
+expandTypeSynonyms = expand where
+  expand = \case
+    TVar v -> return $ TVar v
+    TSyn tsyn -> do
+      DefTypeSyn{synType} <- inWorld (lookupTypeSyn tsyn)
+      expandTypeSynonyms synType
+    TCon tcon -> return $ TCon tcon
+    TApp tfun targ -> do
+      tfun' <- expand tfun
+      targ' <- expand targ
+      return $ TApp tfun' targ'
+    TBuiltin btype -> return $ TBuiltin btype
+    TForall (v, k) t1 -> do
+      t1' <- expand t1
+      return $ TForall (v, k) t1'
+    TStruct recordType -> do
+      recordType' <- mapM (\(n,t) -> do t' <- expand t; return (n,t')) recordType
+      return $ TStruct recordType'
+    TNat typeLevelNat -> return $ TNat typeLevelNat
 
 typeOfBuiltin :: MonadGamma m => BuiltinExpr -> m Type
 typeOfBuiltin = \case
@@ -554,7 +578,9 @@ checkGroundType ty = do
 checkExpr' :: MonadGamma m => Expr -> Type -> m Type
 checkExpr' expr typ = do
   exprType <- typeOf expr
-  unless (alphaEquiv exprType typ) $
+  exprTypeX <- expandTypeSynonyms exprType
+  typX <- expandTypeSynonyms typ
+  unless (alphaEquiv exprTypeX typX) $
     throwWithContext ETypeMismatch{foundType = exprType, expectedType = typ, expr = Just expr}
   pure exprType
 
